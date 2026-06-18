@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
+require('express-async-errors');
+
 const amqp = require('amqplib');
 const axios = require('axios');
 const cors = require('cors');
@@ -17,10 +18,17 @@ app.use(cors({
 const PORT = process.env.PORT || 3001;
 const PROCESSING_SERVICE_URL = process.env.PROCESSING_SERVICE_URL || 'http://localhost:3002';
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/content_tasks')
-    .then(() => console.log('API Service connected to MongoDB'))
-    .catch(err => console.error('MongoDB connection error:', err));
+// Connect to PostgreSQL
+const sequelize = Task.sequelize;
+sequelize.authenticate()
+    .then(() => {
+        console.log('API Service connected to PostgreSQL');
+        return sequelize.sync();
+    })
+    .catch(err => {
+        console.error('PostgreSQL connection error:', err);
+        process.exit(1);
+    });
 
 // Connect to RabbitMQ
 let channel = null;
@@ -32,6 +40,7 @@ async function connectQueue() {
         console.log('API Service connected to RabbitMQ');
     } catch (err) {
         console.error('RabbitMQ connection error:', err);
+        process.exit(1);
     }
 }
 connectQueue();
@@ -44,8 +53,7 @@ app.post('/tasks', async (req, res) => {
 
     try {
         // Create pending task in DB
-        const task = new Task({ originalText, type });
-        await task.save();
+        const task = await Task.create({ originalText, type });
 
         if (type === 'quick') {
             // Synchronous Processing via HTTP
@@ -66,6 +74,7 @@ app.post('/tasks', async (req, res) => {
                 
                 return res.json({ message: 'Task processed synchronously', task });
             } catch (err) {
+                console.error('[API Service] Sync processing failed:', err);
                 task.status = 'failed';
                 await task.save();
                 return res.status(500).json({ error: 'Sync processing failed', task });
@@ -84,18 +93,26 @@ app.post('/tasks', async (req, res) => {
             return res.status(400).json({ error: 'Invalid task type. Must be "quick" or "heavy"' });
         }
     } catch (err) {
+        console.error('[API Service] Error creating task:', err);
         return res.status(500).json({ error: err.message });
     }
 });
 
 app.get('/tasks/:id', async (req, res) => {
     try {
-        const task = await Task.findById(req.params.id);
+        const task = await Task.findByPk(req.params.id);
         if (!task) return res.status(404).json({ error: 'Task not found' });
         res.json(task);
     } catch (err) {
+        console.error('[API Service] Error fetching task:', err);
         res.status(500).json({ error: err.message });
     }
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+    console.error('[API Service] Unhandled Error:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
 });
 
 app.listen(PORT, () => {

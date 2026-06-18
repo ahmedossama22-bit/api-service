@@ -1,11 +1,33 @@
-const mongoose = require('mongoose');
+const { Sequelize, DataTypes } = require('sequelize');
 
-const TaskSchema = new mongoose.Schema({
-    originalText: { type: String, required: true },
-    type: { type: String, enum: ['quick', 'heavy'], required: true },
-    status: { type: String, enum: ['pending', 'processing', 'completed', 'failed'], default: 'pending' },
-    result: { type: String, default: null },
-    createdAt: { type: Date, default: Date.now }
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+    dialect: 'postgres',
+    logging: false
 });
 
-module.exports = mongoose.model('Task', TaskSchema);
+const Task = sequelize.define('Task', {
+    _id: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey: true
+    },
+    originalText: {
+        type: DataTypes.TEXT,
+        allowNull: false
+    },
+    type: {
+        type: DataTypes.ENUM('quick', 'heavy'),
+        allowNull: false
+    },
+    status: {
+        type: DataTypes.ENUM('pending', 'processing', 'completed', 'failed'),
+        defaultValue: 'pending'
+    },
+    result: {
+        type: DataTypes.TEXT,
+        allowNull: true
+    }
+});
+
+module.exports = Task;
+module.exports.sequelize = sequelize;
