@@ -4,16 +4,10 @@ require('express-async-errors');
 
 const amqp = require('amqplib');
 const axios = require('axios');
-const cors = require('cors');
 const Task = require('./Task');
 
 const app = express();
 app.use(express.json());
-app.use(cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
 
 const PORT = process.env.PORT || 3001;
 const PROCESSING_SERVICE_URL = process.env.PROCESSING_SERVICE_URL || 'http://localhost:3002';
